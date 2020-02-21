@@ -50,15 +50,27 @@ namespace MR
 
       setup_render_text (1.0, 0.0, 0.0);
       std::sort (labels.begin(), labels.end());
-      for (size_t i = 2; i < labels.size(); ++i) {
-        float pos[] = { labels[i].dir[0], labels[i].dir[1] };
-        float dist = std::min (width()/abs (pos[0]), height()/abs (pos[1])) / 2.0;
-        int x = std::round (width() /2.0 + pos[0]*dist);
-        int y = std::round (height() /2.0 + pos[1]*dist);
+      int coordLines [6][2];
+      for (size_t i = 0; i < labels.size(); ++i) {
+        float pos[] = { labels[i].dir[0], labels[i].dir[1]};
+        float dist = std::min (width()/(10*abs (pos[0])), height()/(10*abs (pos[1]))) / 2.0;
+        int x = std::round (width() /1.1 + pos[0]*dist);
+        int y = std::round (height() /1.1 + pos[1]*dist);
+        coordLines[i][0] = x;
+        coordLines[i][1] = y;
         render_text_inset (x, y, std::string (labels[i].label));
+      }
+      for (int i = 0; i<5; i+=2) {
+            glBegin(GL_LINE);
+//                glVertex2f(0,0);
+//                glVertex2f(width(), height());
+                glVertex2f(coordLines[i][0], coordLines[i][1]);
+                glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
+            glEnd();
       }
       done_render_text();
     }
+
 
 
 
