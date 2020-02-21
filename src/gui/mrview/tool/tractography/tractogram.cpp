@@ -269,9 +269,19 @@ namespace MR
 
           switch (color_type) {
             case TrackColourType::Direction:
-              source += using_geom ? "  colour = abs (normalize (g_tangent));\n"
-                                   : "  colour = abs (normalize (v_tangent));\n";
-              break;
+              source += using_geom ? "vec3 absnormg = abs (normalize (g_tangent));\n float t = absnormg.x;\n absnormg.x=absnormg.z;\n absnormg.z=absnormg.y;\n absnormg.y =t;\n"
+                                   : "vec3 absnormv = abs (normalize (v_tangent));\n float t = absnormv.x;\n absnormv.x=absnormv.z;\n absnormv.z=absnormv.y;\n absnormv.y =t;\n";
+              source += using_geom ? "float ming = min (min (absnormg.x, absnormg.y), absnormg.z);\n"
+                                   : "float minv = min (min (absnormv.x, absnormv.y), absnormv.z);\n";
+//                source += using_geom ? "  colour =(1,1,1) - absnormg;\n"
+//                                     : "  colour = (1,1,1) - absnormv;\n";
+              source += using_geom ? "if (ming==1) {"
+                                   : "if (minv==1) {";
+              source += "  colour = vec3((0,0,0));";
+              source += "}\n else {";
+              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming))/(1-ming);}\n"
+                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv))/(1-minv);}\n";
+	      break;
             case TrackColourType::ScalarFile:
               source += using_geom ? "  colour = fColour;\n"
                                    : "  colour = v_colour;\n";
