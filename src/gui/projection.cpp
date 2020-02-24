@@ -41,17 +41,25 @@ namespace MR
     void Projection::draw_orientation_labels () const
     {
       vector<OrientationLabel> labels;
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f {-1.0,  0.0,  0.0}), 'L'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 1.0,  0.0,  0.0}), 'R'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0, -1.0,  0.0}), 'P'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  1.0,  0.0}), 'A'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  0.0, -1.0}), 'I'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  0.0,  1.0}), 'S'));
+      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f {-1.0,  0.0,  0.0}), 'L'));// red
+      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 1.0,  0.0,  0.0}), 'R'));// red
+      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0, -1.0,  0.0}), 'P'));// green
+      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  1.0,  0.0}), 'A'));// green
+      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  0.0, -1.0}), 'I'));// blue
+      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  0.0,  1.0}), 'S'));// blue
 
-      setup_render_text (1.0, 0.0, 0.0);
+      // change color text
+
       std::sort (labels.begin(), labels.end());
       int coordLines [6][2];
       for (size_t i = 0; i < labels.size(); ++i) {
+        if(i == 0 || i == 1) {
+          setup_render_text(1.0, 0.0, 0.0);
+        } else if (i==2 || i == 3){
+          setup_render_text(0.0, 1.0, 0.0);
+        } else {
+          setup_render_text(0.0, 0.0, 1.0);
+        }
         float pos[] = { labels[i].dir[0], labels[i].dir[1]};
         float dist = std::min (width()/(10*abs (pos[0])), height()/(10*abs (pos[1]))) / 2.0;
         int x = std::round (width() /1.1 + pos[0]*dist);
@@ -59,6 +67,7 @@ namespace MR
         coordLines[i][0] = x;
         coordLines[i][1] = y;
         render_text_inset (x, y, std::string (labels[i].label));
+        done_render_text();
       }
       for (int i = 0; i<5; i+=2) {
             glBegin(GL_LINE);
@@ -68,7 +77,6 @@ namespace MR
                 glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
             glEnd();
       }
-      done_render_text();
     }
 
 
