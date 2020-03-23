@@ -49,56 +49,60 @@ namespace MR
       int cubeSize = 24;
 //      Eigen::Vector3f F = MVP.model_to_screen (focus);
       Eigen::Vector3f cube[] = {
-          Eigen::Vector3f{0.0,0.0,0.0},
-          Eigen::Vector3f{1.0,0.0,0.0},
+          Eigen::Vector3f{0.0,0.5,0.0},
+          Eigen::Vector3f{1.0,0.5,0.0},
 
-          Eigen::Vector3f{1.0,0.0,0.0},
-          Eigen::Vector3f{1.0,0.0,1.0},
+          Eigen::Vector3f{1.0,0.5,0.0},
+          Eigen::Vector3f{1.0,0.5,1.0},
 
-          Eigen::Vector3f{1.0,0.0,1.0},
-          Eigen::Vector3f{0.0,0.0,1.0},
+          Eigen::Vector3f{1.0,0.5,1.0},
+          Eigen::Vector3f{0.0,0.5,1.0},
 
-          Eigen::Vector3f{0.0,0.0,1.0},
-          Eigen::Vector3f{0.0,0.0,0.0},
-
-
-          Eigen::Vector3f{0.0,1.0,0.0},
-          Eigen::Vector3f{1.0,1.0,0.0},
-
-          Eigen::Vector3f{1.0,1.0,0.0},
-          Eigen::Vector3f{1.0,1.0,1.0},
-
-          Eigen::Vector3f{1.0,1.0,1.0},
-          Eigen::Vector3f{0.0,1.0,1.0},
-
-          Eigen::Vector3f{0.0,1.0,1.0},
-          Eigen::Vector3f{0.0,1.0,0.0},
+          Eigen::Vector3f{0.0,0.5,1.0},
+          Eigen::Vector3f{0.0,0.5,0.0},
 
 
-          Eigen::Vector3f{0.0,0.0,0.0},
-          Eigen::Vector3f{0.0,1.0,0.0},
+          Eigen::Vector3f{0.0,0.0,0.5},
+          Eigen::Vector3f{0.0,1.0,0.5},
 
-          Eigen::Vector3f{1.0,0.0,0.0},
-          Eigen::Vector3f{1.0,1.0,0.0},
+          Eigen::Vector3f{0.0,0.0,0.5},
+          Eigen::Vector3f{1.0,0.0,0.5},
 
-          Eigen::Vector3f{0.0,0.0,1.0},
-          Eigen::Vector3f{0.0,1.0,1.0},
+          Eigen::Vector3f{1.0,0.0,0.5},
+          Eigen::Vector3f{1.0,1.0,0.5},
 
-          Eigen::Vector3f{1.0,0.0,1.0},
-          Eigen::Vector3f{1.0,1.0,1.0},
+          Eigen::Vector3f{0.0,1.0,0.5},
+          Eigen::Vector3f{1.0,1.0,0.5},
 
+
+          Eigen::Vector3f{0.5,0.0,0.0},
+          Eigen::Vector3f{0.5,1.0,0.0},
+
+          Eigen::Vector3f{0.5,0.0,0.0},
+          Eigen::Vector3f{0.5,0.0,1.0},
+
+          Eigen::Vector3f{0.5,1.0,0.0},
+          Eigen::Vector3f{0.5,1.0,1.0},
+
+          Eigen::Vector3f{0.5,0.0,1.0},
+          Eigen::Vector3f{0.5,1.0,1.0},
 
       };
 
       GLfloat data[cubeSize*2];
-      float scale = 50;
+      float scale = 25;
       for(int i = 0; i < cubeSize; i++){
-        Eigen::Vector3f F = MVP.model_to_screen_direction(cube[i]);
+        Eigen::Vector3f before = Eigen::Vector3f{
+          cube[i][0]-0.5,
+          cube[i][1]-0.5,
+          cube[i][2]-0.5
+        };
+        Eigen::Vector3f F = MVP.model_to_screen_direction(before);
         F[0] = 2.0f * F[0] * scale / MVP.width() - 1.0f;
         F[1] = 2.0f * F[1] * scale / MVP.height() - 1.0f;
 
-        F[0] = F[0] + 1.0;
-        F[1] = F[1] + 1.0;
+        F[0] = F[0] + 1.0 + 0.825;
+        F[1] = F[1] + 1.0 + 0.825;
 
         data[2*i] = F[0];
         data[2*i+1] = F[1];
@@ -129,7 +133,7 @@ namespace MR
 //          -1.0f, F[1],
 //          1.0f, F[1]
 //      };
-      DEBUG("data{"+str(data[0])+", "+str(data[1])+", "+str(data[2])+", "+str(data[3])+", "+str(data[4])+", "+str(data[5])+", "+str(data[6])+", "+str(data[7]));
+//      DEBUG("data{"+str(data[0])+", "+str(data[1])+", "+str(data[2])+", "+str(data[3])+", "+str(data[4])+", "+str(data[5])+", "+str(data[6])+", "+str(data[7]));
       gl::BufferData (gl::ARRAY_BUFFER, sizeof(data), data, gl::STATIC_DRAW);
 
       gl::DepthMask (gl::TRUE_);
