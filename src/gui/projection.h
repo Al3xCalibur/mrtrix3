@@ -17,6 +17,7 @@
 #define __gui_projection_h__
 
 #include "gui/crosshair.h"
+#include "gui/crosshair_orientation.h"
 #include "gui/opengl/gl.h"
 #include "gui/opengl/font.h"
 #include "gui/opengl/transformation.h"
@@ -173,7 +174,8 @@ namespace MR
         Projection (GL::Area* parent, const GL::Font& font) :
             glarea (parent),
             font (font),
-            crosshair (new Crosshair()) { }
+            crosshair (new Crosshair()),
+            crosshairOrientation (new CrosshairOrientation()) { }
 
         void set_viewport (const QWidget& frame, int x, int y, int w, int h) {
           ModelViewProjection::set_viewport (x, y, w, h);
@@ -190,6 +192,8 @@ namespace MR
           gl::Viewport (viewport[0], viewport[1], viewport[2], viewport[3]);
         }
 #endif
+
+        void render_lines (const Eigen::Vector3f& focus) const { crosshairOrientation->render (focus, *this); }
 
         void render_crosshairs (const Eigen::Vector3f& focus) const { crosshair->render (focus, *this); }
 
@@ -261,7 +265,6 @@ namespace MR
 
         void draw_orientation_labels () const;
 
-
         const GL::mat4& modelview_projection () const { return MVP; }
         const GL::mat4& modelview_projection_inverse () const { return iMVP; }
         const GL::mat4& modelview () const { return MV; }
@@ -281,6 +284,7 @@ namespace MR
         GL::Area* glarea;
         const GL::Font& font;
         std::shared_ptr<Crosshair> crosshair;
+        std::shared_ptr<CrosshairOrientation> crosshairOrientation;
     };
 
 

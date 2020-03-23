@@ -186,8 +186,10 @@ namespace MR
             }
 
             void draw_crosshairs (const Projection& with_projection) const {
-              if (window().show_crosshairs())
-                with_projection.render_crosshairs (focus());
+              if (window().show_crosshairs()) {
+                with_projection.render_crosshairs(focus());
+                with_projection.render_lines(focus());
+              }
             }
 
             void draw_orientation_labels (const Projection& with_projection) const {

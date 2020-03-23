@@ -53,9 +53,10 @@ namespace MR
       std::sort (labels.begin(), labels.end());
       int coordLines [6][2];
       for (size_t i = 0; i < labels.size(); ++i) {
-        if(i == 0 || i == 1) {
+        std::string label = labels[i].label;
+        if(label == "L" || label == "R") {
           setup_render_text(1.0, 0.0, 0.0);
-        } else if (i==2 || i == 3){
+        } else if (label == "P" || label == "A"){
           setup_render_text(0.0, 1.0, 0.0);
         } else {
           setup_render_text(0.0, 0.0, 1.0);
@@ -69,13 +70,16 @@ namespace MR
         render_text_inset (x, y, std::string (labels[i].label));
         done_render_text();
       }
+
       for (int i = 0; i<5; i+=2) {
-            glBegin(GL_LINE);
+        //draw_lines(MVP);
+//            glBegin(GL_LINE);
 //                glVertex2f(0,0);
 //                glVertex2f(width(), height());
-                glVertex2f(coordLines[i][0], coordLines[i][1]);
-                glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
-            glEnd();
+//                glVertex2f(coordLines[i][0], coordLines[i][1]);
+//                glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
+//            glEnd();
+
       }
     }
 

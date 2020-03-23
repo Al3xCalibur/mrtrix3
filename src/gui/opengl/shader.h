@@ -58,6 +58,9 @@ namespace MR
 
             operator GLuint () const { return (index_); }
 
+            /*
+             * Compile shaders from source
+             */
             void compile (const std::string& source) {
               std::string code = "#version 330 core\n" + source;
               DEBUG ("compiling OpenGL " + this->type() + " shader:\n" + code);
@@ -92,7 +95,9 @@ namespace MR
         using Fragment = Object<gl::FRAGMENT_SHADER>;
 
 
-
+        /*
+         * OpenGL Program's definition
+         */
         class Program
         { NOMEMALIGN
           public:
