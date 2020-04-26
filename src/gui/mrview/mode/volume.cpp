@@ -97,6 +97,7 @@ namespace MR
             "uniform float ray_z, selection_thickness;\n"
             "uniform vec3 ray;\n"
             "out vec4 final_color;\n"
+            "const float contour = 10.0/128.0;\n"
             "void main () {\n"
             "  float amplitude;\n"
             "  vec4 color;\n";
@@ -235,6 +236,15 @@ namespace MR
           source +=
             "    if (final_color.a > 0.95) break;\n"
             "  }\n"
+            "  if (final_color.a >= 0.00001 && final_color.a <= 0.8) {\n"
+            "vec3 new_coord = texcoord + ray * dither;"
+                    "    float a = texture(image_sampler, vec3(coord.x, coord.y - offset, coord.z)).r;\n"
+                    "    \n"
+                    "      if(final_color.a >= 0.05)"
+                    "final_color = vec4(1.0, 0.0, 0.0, 1.0);\n"
+              "else\n"
+              "final_color = vec4(0.5, 0.0, 0.0, 1.0);\n"
+                    "  }\n"
             "}\n";
 
           return source;
