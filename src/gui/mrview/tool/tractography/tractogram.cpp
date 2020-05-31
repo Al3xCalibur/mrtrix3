@@ -1002,7 +1002,7 @@ namespace MR
 
           gl::GenBuffers(1, &color_m);
           gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
-          gl::BufferData(gl::ARRAY_BUFFER, sizeof(colors), colors, gl::STATIC_DRAW);
+          gl::BufferData(gl::TEXTURE_BUFFER, sizeof(colors), colors, gl::STATIC_DRAW); //TODO issue
           gl::GenTextures(1, &color_mapper);
           //color_mapper.push_back(colors);
           vertex_array_objects.push_back (vertex_array_object);
