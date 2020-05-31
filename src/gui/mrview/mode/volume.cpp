@@ -236,15 +236,15 @@ namespace MR
           source +=
             "    if (final_color.a > 0.95) break;\n"
             "  }\n"
-            "  if (final_color.a >= 0.00001 && final_color.a <= 0.8) {\n"
-            "vec3 new_coord = texcoord + ray * dither;"
-                    "    float a = texture(image_sampler, vec3(coord.x, coord.y - offset, coord.z)).r;\n"
-                    "    \n"
-                    "      if(final_color.a >= 0.05)"
-                    "final_color = vec4(1.0, 0.0, 0.0, 1.0);\n"
-              "else\n"
-              "final_color = vec4(0.5, 0.0, 0.0, 1.0);\n"
-                    "  }\n"
+//            "  if (final_color.a >= 0.00001 && final_color.a <= 0.8) {\n"
+//            "vec3 new_coord = texcoord + ray * dither;"
+//                    "    float a = texture(image_sampler, vec3(coord.x, coord.y - offset, coord.z)).r;\n"
+//                    "    \n"
+//                    "      if(final_color.a >= 0.05)"
+//                    "final_color = vec4(1.0, 0.0, 0.0, 1.0);\n"
+//              "else\n"
+//              "final_color = vec4(0.5, 0.0, 0.0, 1.0);\n"
+//                    "  }\n"
             "}\n";
 
           return source;
@@ -446,6 +446,13 @@ namespace MR
 
           gl::BufferData (gl::ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, gl::STREAM_DRAW);
 
+          gl::ClearStencil(0);
+          gl::Clear(gl::STENCIL_BUFFER_BIT);
+          gl::Enable(gl::STENCIL_TEST);
+
+          gl::StencilFunc(gl::ALWAYS, 1, -1);
+          gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);
+
           image()->update_texture3D();
           image()->set_use_transparency (true);
 
@@ -527,6 +534,88 @@ namespace MR
           GL_CHECK_ERROR;
           image()->stop (volume_shader);
           GL_CHECK_ERROR;
+
+          gl::BufferData (gl::ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, gl::STREAM_DRAW);
+
+          gl::Disable (gl::BLEND);
+          gl::Enable (gl::DEPTH_TEST);
+          gl::DepthMask (gl::TRUE_);
+
+          gl::StencilFunc(gl::NOTEQUAL, 1, -1);
+          gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);
+          gl::LineWidth(15);
+
+          image()->start (volume_shader, image()->scale_factor()*3.0f);
+          gl::UniformMatrix4fv (gl::GetUniformLocation (volume_shader, "M"), 1, gl::FALSE_, M);
+          gl::Uniform3fv (gl::GetUniformLocation (volume_shader, "ray"), 1, ray.data());
+          gl::Uniform1i (gl::GetUniformLocation (volume_shader, "image_sampler"), 0);
+          gl::Uniform1f (gl::GetUniformLocation (volume_shader, "selection_thickness"), 3.0*step_size);
+
+          if (ColourMap::maps[image()->colourmap].is_colour)
+            gl::Uniform3f (gl::GetUniformLocation (volume_shader, "colourmap_colour"),
+                           1.0f, 1.0f, 1.0f);
+
+          gl::ActiveTexture (gl::TEXTURE0);
+          gl::BindTexture (gl::TEXTURE_3D, image()->texture());
+
+          gl::ActiveTexture (gl::TEXTURE1);
+          if (!depth_texture) {
+            depth_texture.gen (gl::TEXTURE_2D);
+            depth_texture.bind();
+            depth_texture.set_interp (gl::NEAREST);
+          }
+          else
+            depth_texture.bind();
+
+          GL_CHECK_ERROR;
+#if QT_VERSION >= 0x050100
+          gl::CopyTexImage2D (gl::TEXTURE_2D, 0, gl::DEPTH_COMPONENT, 0, 0, m*projection.width(), m*projection.height(), 0);
+#else
+          gl::CopyTexImage2D (gl::TEXTURE_2D, 0, gl::DEPTH_COMPONENT, 0, 0, projection.width(), projection.height(), 0);
+#endif
+
+          GL_CHECK_ERROR;
+          gl::Uniform1i (gl::GetUniformLocation (volume_shader, "depth_sampler"), 1);
+
+          GL_CHECK_ERROR;
+
+          for (size_t n = 0; n < clip.size(); ++n) {
+            gl::Uniform4fv (gl::GetUniformLocation (volume_shader, ("clip"+str(n)).c_str()), 1,
+                            clip_real2tex (T2S, S2T, ray_real_space, clip[n].first));
+            gl::Uniform1i (gl::GetUniformLocation (volume_shader, ("clip"+str(n)+"_selected").c_str()), clip[n].second);
+          }
+          GL_CHECK_ERROR;
+
+          for (int n = 0; n < overlays_for_3D.size(); ++n) {
+            gl::ActiveTexture (gl::TEXTURE2 + n);
+            gl::BindTexture (gl::TEXTURE_3D, overlays_for_3D[n]->texture());
+            overlays_for_3D[n]->update_texture3D();
+            overlays_for_3D[n]->texture().set_interp_on (overlays_for_3D[n]->interpolate());
+            gl::Uniform1i (gl::GetUniformLocation (volume_shader, ("overlay_sampler"+str(n)).c_str()), 2+n);
+
+            GL::mat4 overlay_M = GL::inv (get_tex_to_scanner_matrix (*overlays_for_3D[n])) * T2S;
+            GL::vec4 overlay_ray = overlay_M * GL::vec4 (ray, 0.0);
+            gl::UniformMatrix4fv (gl::GetUniformLocation (volume_shader, ("overlay_M"+str(n)).c_str()), 1, gl::FALSE_, overlay_M);
+            gl::Uniform3fv (gl::GetUniformLocation (volume_shader, ("overlay_ray"+str(n)).c_str()), 1, overlay_ray);
+
+            overlays_for_3D[n]->set_shader_variables (volume_shader, overlays_for_3D[n]->scale_factor(), "overlay"+str(n)+"_");
+          }
+
+          GL_CHECK_ERROR;
+          gl::Uniform1f (gl::GetUniformLocation (volume_shader, "ray_z"), 0.5*ray_eye[2]);
+
+          gl::Enable (gl::BLEND);
+          gl::BlendFunc (gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+
+          gl::DepthMask (gl::FALSE_);
+          gl::ActiveTexture (gl::TEXTURE0);
+
+          GL_CHECK_ERROR;
+          gl::MultiDrawElements (gl::TRIANGLE_FAN, counts, gl::UNSIGNED_BYTE, starts, 3);
+          GL_CHECK_ERROR;
+          image()->stop (volume_shader);
+          GL_CHECK_ERROR;
+
           gl::Disable (gl::BLEND);
 
           GL_CHECK_ERROR;
