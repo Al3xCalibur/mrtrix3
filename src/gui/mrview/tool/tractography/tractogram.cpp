@@ -221,6 +221,7 @@ namespace MR
             "uniform float lower, upper;\n"
             "uniform vec3 const_colour;\n"
             "uniform mat4 MV;\n"
+            "uniform samplerBuffer u_color_mapper;\n"
             "out vec3 colour;\n";
 
           if (color_type == TrackColourType::ScalarFile || color_type == TrackColourType::Ends)
@@ -279,8 +280,9 @@ namespace MR
                                    : "if (minv==1) {";
               source += "  colour = vec3((0,0,0));";
               source += "}\n else {";
-              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming))/(1-ming);}\n"
-                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv))/(1-minv);}\n";
+              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming))/(1-ming);\n"
+                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv))/(1-minv);\n"; // TODO change colors
+              source += "colour.x = texelFetch(u_color_mapper, 0).x;}\n";
 	      break;
             case TrackColourType::ScalarFile:
               source += using_geom ? "  colour = fColour;\n"
@@ -421,6 +423,10 @@ namespace MR
 
           start (track_shader);
           transform.set (track_shader);
+          u_color_mapper = gl::GetUniformLocation (track_shader, "u_color_mapper");
+          gl::BindTexture(gl::TEXTURE_BUFFER, color_mapper);
+          gl::TexBuffer(gl::TEXTURE_BUFFER, GL_RGB8, color_m);
+          gl::Uniform1i(u_color_mapper, 0);
 
           if (tractography_tool.do_crop_to_slab) {
             gl::Uniform3fv (gl::GetUniformLocation (track_shader, "screen_normal"), 1, transform.screen_normal().data());
@@ -984,6 +990,21 @@ namespace MR
           gl::BindBuffer (gl::ARRAY_BUFFER, vertexbuffer);
           gl::BufferData (gl::ARRAY_BUFFER, buffer.size() * sizeof(Eigen::Vector3f), &buffer[0][0], gl::STATIC_DRAW);
 
+          static const GLubyte colors[] = {
+              1, 255, 100,
+              25, 100, 3,
+              100,  0, 255,
+              100,  0, 255,
+              0, 100, 255,
+              0,  0, 255,
+          };
+//          u_color_mapper = glGetUniformLocation(grid_prog, "u_color_mapper");
+
+          gl::GenBuffers(1, &color_m);
+          gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
+          gl::BufferData(gl::ARRAY_BUFFER, sizeof(colors), colors, gl::STATIC_DRAW);
+          gl::GenTextures(1, &color_mapper);
+          //color_mapper.push_back(colors);
           vertex_array_objects.push_back (vertex_array_object);
           vertex_buffers.push_back (vertexbuffer);
           track_starts.push_back (starts);
