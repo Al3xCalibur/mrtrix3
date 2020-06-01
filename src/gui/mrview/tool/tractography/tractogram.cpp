@@ -22,7 +22,8 @@
 #include "dwi/tractography/scalar_file.h"
 #include "gui/opengl/lighting.h"
 #include "gui/mrview/mode/base.h"
-
+#include <iostream>
+#include <fstream>
 
 
 const size_t MAX_BUFFER_SIZE = 2796200;  // number of points to fill 32MB
@@ -280,9 +281,9 @@ namespace MR
                                    : "if (minv==1) {";
               source += "  colour = vec3((0,0,0));";
               source += "}\n else {";
-              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming))/(1-ming);\n"
-                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv))/(1-minv);\n"; // TODO change colors
-              source += "colour.x = texelFetch(u_color_mapper, 0).x;}\n";
+              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming))/(1-ming);}\n"
+                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv))/(1-minv);}\n"; // TODO change colors
+//              source += "colour = texelFetch(u_color_mapper, (255*colour.x) << 16 + (255*colour.y) << 8 + (255*colour.z) );}\n";
 	      break;
             case TrackColourType::ScalarFile:
               source += using_geom ? "  colour = fColour;\n"
@@ -295,7 +296,11 @@ namespace MR
             case TrackColourType::Manual:
               source += "  colour = const_colour;\n";
           }
-
+//          source += "vec4 true_color = texelFetch(u_color_mapper, int(255*colour.x) << 16 + int(255*colour.y) << 8 + int(255*colour.z) );\n";
+          source += "vec4 true_color = texelFetch(u_color_mapper, 0 );\n";
+          source += "if(true_color.x == 0) colour.x = 1.0;\n";
+          source += "colour.y = float(true_color.y)/255;\n";
+          source += "colour.z = float(true_color.z)/255;\n";
           if (use_lighting && (using_geom || using_points)) {
 
             if (using_geom) {
@@ -425,6 +430,7 @@ namespace MR
           transform.set (track_shader);
           u_color_mapper = gl::GetUniformLocation (track_shader, "u_color_mapper");
           gl::BindTexture(gl::TEXTURE_BUFFER, color_mapper);
+          gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
           gl::TexBuffer(gl::TEXTURE_BUFFER, GL_RGB8, color_m);
           gl::Uniform1i(u_color_mapper, 0);
 
@@ -990,20 +996,27 @@ namespace MR
           gl::BindBuffer (gl::ARRAY_BUFFER, vertexbuffer);
           gl::BufferData (gl::ARRAY_BUFFER, buffer.size() * sizeof(Eigen::Vector3f), &buffer[0][0], gl::STATIC_DRAW);
 
-          static const GLubyte colors[] = {
-              1, 255, 100,
-              25, 100, 3,
-              100,  0, 255,
-              100,  0, 255,
-              0, 100, 255,
-              0,  0, 255,
-          };
-//          u_color_mapper = glGetUniformLocation(grid_prog, "u_color_mapper");
+//          static const unsigned char colors[] = {
+//              1, 150, 100,
+//              25, 100, 3,
+//              100,  0, 255,
+//              100,  0, 255,
+//              0, 100, 255,
+//              0,  0, 255,
+//          };
+          char *colors = new char[3*4096*4096];
 
+          std::ifstream infile("/home/alex/Documents/mrtrix3/out.bmp");
+
+          infile.read(colors, 3*4096*4096);
+          colors[0] = 125;
+          colors[1] = 125;
+          colors[2] = 125;
           gl::GenBuffers(1, &color_m);
-          gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
-          gl::BufferData(gl::TEXTURE_BUFFER, sizeof(colors), colors, gl::STATIC_DRAW); //TODO issue
+          gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, color_m);
+          gl::BufferData(gl::TEXTURE_BUFFER, 3*4096*4096, colors, gl::STATIC_DRAW); //TODO issue
           gl::GenTextures(1, &color_mapper);
+          gl::BindBuffer(gl::TEXTURE_BUFFER, 0);
           //color_mapper.push_back(colors);
           vertex_array_objects.push_back (vertex_array_object);
           vertex_buffers.push_back (vertexbuffer);
