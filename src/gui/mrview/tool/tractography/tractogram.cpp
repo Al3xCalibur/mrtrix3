@@ -1013,7 +1013,7 @@ namespace MR
           colors[1] = 125;
           colors[2] = 125;
           gl::GenBuffers(1, &color_m);
-          gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, color_m);
+          gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
           gl::BufferData(gl::TEXTURE_BUFFER, 3*4096*4096, colors, gl::STATIC_DRAW); //TODO issue
           gl::GenTextures(1, &color_mapper);
           gl::BindBuffer(gl::TEXTURE_BUFFER, 0);
