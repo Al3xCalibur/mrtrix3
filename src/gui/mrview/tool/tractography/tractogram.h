@@ -139,7 +139,7 @@ namespace MR
 
             GLuint color_m;
             GLuint color_mapper;
-            GLuint u_color_mapper;
+            GLint u_color_mapper;
             vector<GLuint> vertex_buffers;
             vector<GLuint> vertex_array_objects;
             vector<GLuint> colour_buffers;

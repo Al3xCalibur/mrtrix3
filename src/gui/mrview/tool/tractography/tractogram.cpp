@@ -273,16 +273,16 @@ namespace MR
             case TrackColourType::Direction:
               source += using_geom ? "vec3 absnormg = abs (normalize (g_tangent));\n float t = absnormg.x;\n absnormg.x=absnormg.z;\n absnormg.z=absnormg.y;\n absnormg.y =t;\n"
                                    : "vec3 absnormv = abs (normalize (v_tangent));\n float t = absnormv.x;\n absnormv.x=absnormv.z;\n absnormv.z=absnormv.y;\n absnormv.y =t;\n";
-              source += using_geom ? "float ming = min (min (absnormg.x, absnormg.y), absnormg.z);\n"
-                                   : "float minv = min (min (absnormv.x, absnormv.y), absnormv.z);\n";
+              source += using_geom ? "float ming = min (min (1-absnormg.x, 1-absnormg.y), 1-absnormg.z);\n"
+                                   : "float minv = min (min (1-absnormv.x, 1-absnormv.y), 1-absnormv.z);\n";
 //                source += using_geom ? "  colour =(1,1,1) - absnormg;\n"
 //                                     : "  colour = (1,1,1) - absnormv;\n";
               source += using_geom ? "if (ming==1) {"
                                    : "if (minv==1) {";
               source += "  colour = vec3((0,0,0));";
               source += "}\n else {";
-              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming))/(1-ming);}\n"
-                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv))/(1-minv);}\n"; // TODO change colors
+              source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming));}\n"
+                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv));}\n"; // TODO change colors
 //              source += "colour = texelFetch(u_color_mapper, (255*colour.x) << 16 + (255*colour.y) << 8 + (255*colour.z) );}\n";
 	      break;
             case TrackColourType::ScalarFile:
@@ -297,10 +297,11 @@ namespace MR
               source += "  colour = const_colour;\n";
           }
 //          source += "vec4 true_color = texelFetch(u_color_mapper, int(255*colour.x) << 16 + int(255*colour.y) << 8 + int(255*colour.z) );\n";
-          source += "vec4 true_color = texelFetch(u_color_mapper, 0 );\n";
-          source += "if(true_color.x == 0) colour.x = 1.0;\n";
-          source += "colour.y = float(true_color.y)/255;\n";
-          source += "colour.z = float(true_color.z)/255;\n";
+//          source += "vec4 true_color = texelFetch(u_color_mapper, 0 );\n";
+          source += "int pos = int(colour.r*255)+int(colour.g*255)*256+int(colour.b*255)*65536;\n";
+          source += "colour.r = texelFetch(u_color_mapper, 3*(pos+18)).r;\n";
+          source += "colour.g = texelFetch(u_color_mapper, 3*(pos+18)+1).r;\n";
+          source += "colour.b = texelFetch(u_color_mapper, 3*(pos+18)+2).r;\n";
           if (use_lighting && (using_geom || using_points)) {
 
             if (using_geom) {
@@ -429,9 +430,10 @@ namespace MR
           start (track_shader);
           transform.set (track_shader);
           u_color_mapper = gl::GetUniformLocation (track_shader, "u_color_mapper");
+          gl::ActiveTexture(gl::TEXTURE0);
           gl::BindTexture(gl::TEXTURE_BUFFER, color_mapper);
           gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
-          gl::TexBuffer(gl::TEXTURE_BUFFER, GL_RGB8, color_m);
+          gl::TexBuffer(gl::TEXTURE_BUFFER, gl::R8, color_m);
           gl::Uniform1i(u_color_mapper, 0);
 
           if (tractography_tool.do_crop_to_slab) {
@@ -1004,17 +1006,22 @@ namespace MR
 //              0, 100, 255,
 //              0,  0, 255,
 //          };
-          char *colors = new char[3*4096*4096];
+          char *colors = new char[3*4096*4096+18];
 
-          std::ifstream infile("/home/alex/Documents/mrtrix3/out.bmp");
+          std::ifstream infile("/home/alex/Documents/mrtrix3/out2.bmp");
 
-          infile.read(colors, 3*4096*4096);
-          colors[0] = 125;
-          colors[1] = 125;
-          colors[2] = 125;
+          infile.read(colors, 3*4096*4096+18);
+//          colors[0] = 200;
+//          colors[1] = 100;
+//          colors[2] = 5;
+//          float colors[] = {
+//              1.0f, 0.5f, 0.2f,
+//              0.0f, 1.0f, 0.0f,
+//              1.0f, 0.0f, 1.0f
+//          };
           gl::GenBuffers(1, &color_m);
           gl::BindBuffer(gl::TEXTURE_BUFFER, color_m);
-          gl::BufferData(gl::TEXTURE_BUFFER, 3*4096*4096, colors, gl::STATIC_DRAW); //TODO issue
+          gl::BufferData(gl::TEXTURE_BUFFER, /*sizeof(colors)*/3*4096*4096+18, colors, gl::STATIC_DRAW); //TODO issue
           gl::GenTextures(1, &color_mapper);
           gl::BindBuffer(gl::TEXTURE_BUFFER, 0);
           //color_mapper.push_back(colors);
