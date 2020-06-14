@@ -12,70 +12,77 @@
  * For more details, see http://www.mrtrix.org/
  */
 
-
 #include "gui/projection.h"
 
-namespace MR
-{
-  namespace GUI
-  {
+namespace MR {
+namespace GUI {
 
-    namespace
-    {
-      class OrientationLabel
-      { MEMALIGN(OrientationLabel)
-        public:
-          OrientationLabel () { }
-          OrientationLabel (const Eigen::Vector3f& direction, const char textlabel) :
-            dir (direction), label (1, textlabel) { }
-          Eigen::Vector3f dir;
-          std::string label;
-          bool operator< (const OrientationLabel& R) const {
-            return dir.squaredNorm() < R.dir.squaredNorm();
-          }
-      };
+namespace {
+class OrientationLabel {
+  MEMALIGN(OrientationLabel)
+public:
+  OrientationLabel() {}
+  OrientationLabel(const Eigen::Vector3f &direction, const char textlabel)
+      : dir(direction), label(1, textlabel) {}
+  Eigen::Vector3f dir;
+  std::string label;
+  bool operator<(const OrientationLabel &R) const {
+    return dir.squaredNorm() < R.dir.squaredNorm();
+  }
+};
+} // namespace
+
+void Projection::draw_orientation_labels() const {
+  vector<OrientationLabel> labels;
+  labels.push_back(OrientationLabel(
+      model_to_screen_direction(Eigen::Vector3f{-1.0, 0.0, 0.0}), 'L')); // red
+  labels.push_back(OrientationLabel(
+      model_to_screen_direction(Eigen::Vector3f{1.0, 0.0, 0.0}), 'R')); // red
+  labels.push_back(OrientationLabel(
+      model_to_screen_direction(Eigen::Vector3f{0.0, -1.0, 0.0}),
+      'P')); // green
+  labels.push_back(OrientationLabel(
+      model_to_screen_direction(Eigen::Vector3f{0.0, 1.0, 0.0}), 'A')); // green
+  labels.push_back(OrientationLabel(
+      model_to_screen_direction(Eigen::Vector3f{0.0, 0.0, -1.0}), 'I')); // blue
+  labels.push_back(OrientationLabel(
+      model_to_screen_direction(Eigen::Vector3f{0.0, 0.0, 1.0}), 'S')); // blue
+
+  // change color text
+
+  std::sort(labels.begin(), labels.end());
+  int coordLines[6][2];
+  for (size_t i = 0; i < labels.size(); ++i) {
+    std::string label = labels[i].label;
+    if (label == "L" || label == "R") {
+      setup_render_text(0.651, 0.3216, 0.6039);
+    } else if (label == "P" || label == "A") {
+      setup_render_text(0.9569, 0.902, 0.0);
+    } else {
+      setup_render_text(0.4314, 0.7804, 0.851);
     }
+    float pos[] = {labels[i].dir[0], labels[i].dir[1]};
+    float dist =
+        std::min(width() / (10 * abs(pos[0])), height() / (10 * abs(pos[1]))) /
+        2.0;
+    int x = std::round(width() / 1.1 + pos[0] * dist);
+    int y = std::round(height() / 1.1 + pos[1] * dist);
+    coordLines[i][0] = x;
+    coordLines[i][1] = y;
+    render_text_inset(x, y, std::string(labels[i].label));
+    done_render_text();
+  }
 
-
-
-    void Projection::draw_orientation_labels () const
-    {
-      vector<OrientationLabel> labels;
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f {-1.0,  0.0,  0.0}), 'L'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 1.0,  0.0,  0.0}), 'R'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0, -1.0,  0.0}), 'P'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  1.0,  0.0}), 'A'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  0.0, -1.0}), 'I'));
-      labels.push_back (OrientationLabel (model_to_screen_direction (Eigen::Vector3f { 0.0,  0.0,  1.0}), 'S'));
-
-      setup_render_text (1.0, 0.0, 0.0);
-      std::sort (labels.begin(), labels.end());
-      int coordLines [6][2];
-      for (size_t i = 0; i < labels.size(); ++i) {
-        float pos[] = { labels[i].dir[0], labels[i].dir[1]};
-        float dist = std::min (width()/(10*abs (pos[0])), height()/(10*abs (pos[1]))) / 2.0;
-        int x = std::round (width() /1.1 + pos[0]*dist);
-        int y = std::round (height() /1.1 + pos[1]*dist);
-        coordLines[i][0] = x;
-        coordLines[i][1] = y;
-        render_text_inset (x, y, std::string (labels[i].label));
-      }
-      for (int i = 0; i<5; i+=2) {
-            glBegin(GL_LINE);
-//                glVertex2f(0,0);
-//                glVertex2f(width(), height());
-                glVertex2f(coordLines[i][0], coordLines[i][1]);
-                glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
-            glEnd();
-      }
-      done_render_text();
-    }
-
-
-
-
-
-
+  for (int i = 0; i < 5; i += 2) {
+    // draw_lines(MVP);
+    //            glBegin(GL_LINE);
+    //                glVertex2f(0,0);
+    //                glVertex2f(width(), height());
+    //                glVertex2f(coordLines[i][0], coordLines[i][1]);
+    //                glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
+    //            glEnd();
   }
 }
 
+} // namespace GUI
+} // namespace MR
