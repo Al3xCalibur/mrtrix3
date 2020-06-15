@@ -26,6 +26,7 @@
 #include <fstream>
 
 
+
 const size_t MAX_BUFFER_SIZE = 2796200;  // number of points to fill 32MB
 
 namespace MR
@@ -1008,7 +1009,7 @@ namespace MR
 //          };
           char *colors = new char[3*4096*4096+18];
 
-          std::ifstream infile("/home/alex/Documents/mrtrix3/out2.bmp");
+          std::ifstream infile(getenv("MRTRIX_IMAGE"));
 
           infile.read(colors, 3*4096*4096+18);
 //          colors[0] = 200;
