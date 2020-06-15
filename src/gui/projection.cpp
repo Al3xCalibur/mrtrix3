@@ -50,38 +50,24 @@ void Projection::draw_orientation_labels() const {
 
   // change color text
 
-  std::sort(labels.begin(), labels.end());
-  int coordLines[6][2];
+  std::sort (labels.begin(), labels.end());
   for (size_t i = 0; i < labels.size(); ++i) {
     std::string label = labels[i].label;
-    if (label == "L" || label == "R") {
+    if(label == "L" || label == "R") {
       setup_render_text(0.651, 0.3216, 0.6039);
-    } else if (label == "P" || label == "A") {
+    } else if (label == "P" || label == "A"){
       setup_render_text(0.9569, 0.902, 0.0);
     } else {
       setup_render_text(0.4314, 0.7804, 0.851);
     }
-    float pos[] = {labels[i].dir[0], labels[i].dir[1]};
-    float dist =
-        std::min(width() / (10 * abs(pos[0])), height() / (10 * abs(pos[1]))) /
-        2.0;
-    int x = std::round(width() / 1.1 + pos[0] * dist);
-    int y = std::round(height() / 1.1 + pos[1] * dist);
-    coordLines[i][0] = x;
-    coordLines[i][1] = y;
-    render_text_inset(x, y, std::string(labels[i].label));
+    float pos[] = { labels[i].dir[0], labels[i].dir[1]};
+    float dist = std::min (height()/(10*abs (pos[0])), height()/(10*abs (pos[1]))) * 1.2;
+    int x = std::round (width() /1.1 + pos[0]*dist);
+    int y = std::round (height() - width()/11 + pos[1]*dist);
+    render_text_inset (x, y, std::string (labels[i].label));
     done_render_text();
   }
 
-  for (int i = 0; i < 5; i += 2) {
-    // draw_lines(MVP);
-    //            glBegin(GL_LINE);
-    //                glVertex2f(0,0);
-    //                glVertex2f(width(), height());
-    //                glVertex2f(coordLines[i][0], coordLines[i][1]);
-    //                glVertex2f(coordLines[i+1][0], coordLines[i+1][1]);
-    //            glEnd();
-  }
 }
 
 } // namespace GUI

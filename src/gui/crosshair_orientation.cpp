@@ -168,7 +168,7 @@ namespace MR
         Eigen::Vector3f FRouge = MVP.model_to_screen_direction(beforeRouge);
         FRouge[0] = 2.0f * FRouge[0] * scale / MVP.width() - 1.0f;
         FRouge[1] = 2.0f * FRouge[1] * scale / MVP.height() - 1.0f;
-
+        DEBUG("scale " + str(scale));
         FRouge[0] = FRouge[0] + 1.0 + 0.825;
         FRouge[1] = FRouge[1] + 1.0 + 0.825 - 0.15;
 
@@ -198,32 +198,6 @@ namespace MR
         dataBleu[2*i+1] = FBleu[1];
       }
 
-//      Eigen::Vector3f F1 = MVP.model_to_screen(Eigen::Vector3f{1.0,0.0,0.0});
-
-//      float dist = std::min (MVP.width()/(10), MVP.height()/(10)) / 2.0;
-//      float dist = std::min (MVP.width()/(10*abs (F[0])), MVP.height()/(10*abs (F[1]))) / 2.0;
-//      F[0] = std::round (MVP.width() /1.1 + F[0]*dist);
-//      F[1] = std::round (MVP.height() /1.1 + F[1]*dist);
-//
-//      float dist1 = std::min (MVP.width()/(10*abs (F1[0])), MVP.height()/(10*abs (F1[1]))) / 2.0;
-//      F1[0] = std::round (MVP.width() /1.1 + F1[0]*dist1);
-//      F1[1] = std::round (MVP.height() /1.1 + F1[1]*dist1);
-//      F[0] = std::round (F[0] - MVP.x_position()) - 0.5f;
-//      F[1] = std::round (F[1] - MVP.y_position()) + 0.5f;
-
-//      GLfloat data [] = {
-//          F[0], F[1],
-//          F1[0], F1[1],
-//          -F[0], F[1],
-//          -F1[0], -F1[1]
-//      };
-//      GLfloat data [] = {
-//          F[0], -1.0f,
-//          F[0], 1.0f,
-//          -1.0f, F[1],
-//          1.0f, F[1]
-//      };
-//      DEBUG("data{"+str(data[0])+", "+str(data[1])+", "+str(data[2])+", "+str(data[3])+", "+str(data[4])+", "+str(data[5])+", "+str(data[6])+", "+str(data[7]));
       gl::BufferData (gl::ARRAY_BUFFER, sizeof(dataRouge), dataRouge, gl::STATIC_DRAW);
 
       gl::DepthMask (gl::TRUE_);
