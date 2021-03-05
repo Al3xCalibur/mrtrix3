@@ -1,0 +1,12 @@
+<?xml version = "1.0"?>
+<!-- Parameters for color manipulation in mrview -->
+<Rotation>
+  <!-- Definition of a rotation of colors around axis defined by    -->
+  <!--   1) Orientation vector (x,y,z) going through origin (0,0,0) -->
+  <!--   2) Angle defined in degrees                                -->
+  
+  <!-- Orientation vector of rotation -->
+  <OrientationVector x="1.0" y="0.0" z="0.0"/>
+  <!-- Angle of rotation (expressed in degrees) -->
+  <Angle degrees="90.0"/>
+</Rotation>

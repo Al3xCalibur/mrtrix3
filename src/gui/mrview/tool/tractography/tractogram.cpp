@@ -15,6 +15,8 @@
 
 #include "progressbar.h"
 #include "gui/mrview/tool/tractography/tractogram.h"
+#include "gui/mrview/tool/tractography/pugiconfig.hpp"
+#include "gui/mrview/tool/tractography/pugixml.hpp"
 #include "gui/mrview/window.h"
 #include "gui/projection.h"
 #include "dwi/tractography/file.h"
@@ -24,8 +26,13 @@
 #include "gui/mrview/mode/base.h"
 #include <iostream>
 #include <fstream>
+#include <array>
+#include <string>
 
-
+// The following instruction is *very* ugly, but I could not find
+// another way to have build script compile pugixml.cpp and then
+// link the object file
+#include "gui/mrview/tool/tractography/pugixml.cpp"
 
 const size_t MAX_BUFFER_SIZE = 2796200;  // number of points to fill 32MB
 
@@ -38,6 +45,18 @@ namespace MR
       namespace Tool
       {
         const int Tractogram::track_padding;
+
+	// Variables for storing rotation matrix coefficient
+	static std::string m11 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m12 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m13 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m21 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m22 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m23 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m31 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m32 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	static std::string m33 = "To be initialized in Tractogram::load_tracks_onto_GPU";
+	
         TrackGeometryType Tractogram::default_tract_geom (TrackGeometryType::Pseudotubes);
 
         std::string Tractogram::Shader::vertex_shader_source (const Displayable& displayable)
@@ -272,18 +291,28 @@ namespace MR
 
           switch (color_type) {
             case TrackColourType::Direction:
+	      // Convert RGB to CMYB explained (in French) at https://fr.wikipedia.org/wiki/Quadrichromie#Conversion_de_RVB_vers_CMJN
               source += using_geom ? "vec3 absnormg = abs (normalize (g_tangent));\n float t = absnormg.x;\n absnormg.x=absnormg.z;\n absnormg.z=absnormg.y;\n absnormg.y =t;\n"
                                    : "vec3 absnormv = abs (normalize (v_tangent));\n float t = absnormv.x;\n absnormv.x=absnormv.z;\n absnormv.z=absnormv.y;\n absnormv.y =t;\n";
+	      // Compute min(C,M,Y)
               source += using_geom ? "float ming = min (min (1-absnormg.x, 1-absnormg.y), 1-absnormg.z);\n"
                                    : "float minv = min (min (1-absnormv.x, 1-absnormv.y), 1-absnormv.z);\n";
 //                source += using_geom ? "  colour =(1,1,1) - absnormg;\n"
 //                                     : "  colour = (1,1,1) - absnormv;\n";
+              // Compute CMYB according to algorithm 1 of https://fr.wikipedia.org/wiki/Quadrichromie#Conversion_de_RVB_vers_CMJN
               source += using_geom ? "if (ming==1) {"
                                    : "if (minv==1) {";
               source += "  colour = vec3((0,0,0));";
               source += "}\n else {";
               source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming));}\n"
-                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv));}\n"; // TODO change colors
+                                   : "  colour = ((1,1,1) - absnormv - (minv,minv,minv));}\n";
+	      // Color rotation
+	      source += "vec3 colour_rot = (";
+	      source += m11 + "* colour.x + " + m12 + "* colour.y + " + m13 + "* colour.z, ";
+	      source += m21 + "* colour.x + " + m22 + "* colour.y + " + m33 + "* colour.z, ";
+	      source += m31 + "* colour.x + " + m32 + "* colour.y + " + m33 + "* colour.z); ";
+	      source += "colour = colour_rot;";
+	      
 //              source += "colour = texelFetch(u_color_mapper, (255*colour.x) << 16 + (255*colour.y) << 8 + (255*colour.z) );}\n";
 	      break;
             case TrackColourType::ScalarFile:
@@ -299,6 +328,7 @@ namespace MR
           }
 //          source += "vec4 true_color = texelFetch(u_color_mapper, int(255*colour.x) << 16 + int(255*colour.y) << 8 + int(255*colour.z) );\n";
 //          source += "vec4 true_color = texelFetch(u_color_mapper, 0 );\n";
+	  // Convert colors within a printable range thanks to MRTRIX_IMAGE file
           source += "int pos = int(colour.r*255)+int(colour.g*255)*256+int(colour.b*255)*65536;\n";
           source += "colour.r = texelFetch(u_color_mapper, 3*(pos+18)).r;\n";
           source += "colour.g = texelFetch(u_color_mapper, 3*(pos+18)+1).r;\n";
@@ -1038,7 +1068,43 @@ namespace MR
           starts.clear();
           sizes.clear();
           tck_count = 0;
-          ASSERT_GL_MRVIEW_CONTEXT_IS_CURRENT;
+
+	  // Initialize Rotation matrix
+	  pugi::xml_document doc;
+	  pugi::xml_parse_result result = doc.load_file(getenv("MRTRIX_XML"));
+
+	  if (result.status != pugi::status_ok) {
+	    std::cerr << "Coud not open XML file named \"" << getenv("MRTRIX_XML") << "\" (according to \"MRTRIX_XML\" environnement variable)" << std::endl;
+	    exit(1);
+	  }
+
+	  std::cout << "Load result: " << result.description() << std::endl;
+	  std::cout << "Rotation" << std::endl;
+	  auto childRot = doc.child("Rotation");
+	  auto childOV = childRot.child("OrientationVector");
+	  std::array<double, 3> v = { childOV.attribute("x").as_double(),
+				      childOV.attribute("y").as_double(),
+				      childOV.attribute("z").as_double() };
+
+	  double phi = childRot.child("Angle").attribute("degrees").as_double() * M_PI / 180.0;
+
+	  // We compute rotation matrix according to http://www.pierreaudibert.fr/tra/Rotation3D.pdf
+	  double norm = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	  double a = v[0] / norm;
+	  double b = v[1] / norm;
+	  double c = v[2] / norm;
+
+	  m11 = std::to_string( (1 - cos(phi)) * a * a + cos(phi) );
+	  m12 = std::to_string( (1 - cos(phi)) * a * b - sin(phi) * c );
+	  m13 = std::to_string( (1 - cos(phi)) * a * c + sin(phi) * b );
+	  m21 = std::to_string( (1 - cos(phi)) * b * a + sin(phi) * c );
+	  m22 = std::to_string( (1 - cos(phi)) * b * b + cos(phi) );
+	  m23 = std::to_string( (1 - cos(phi)) * b * c - sin(phi) * a );
+	  m31 = std::to_string( (1 - cos(phi)) * c * a - sin(phi) * b );
+	  m32 = std::to_string( (1 - cos(phi)) * c * b + sin(phi) * a );
+	  m33 = std::to_string( (1 - cos(phi)) * c * c + cos(phi) );
+	  
+	  ASSERT_GL_MRVIEW_CONTEXT_IS_CURRENT;
         }
 
         void Tractogram::load_end_colours_onto_GPU (vector<Eigen::Vector3f>& buffer)
