@@ -46,18 +46,28 @@ namespace MR
       {
         const int Tractogram::track_padding;
 
-	// Variables for storing rotation matrix coefficient
-	static std::string m11 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m12 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m13 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m21 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m22 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m23 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m31 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m32 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	static std::string m33 = "To be initialized in Tractogram::load_tracks_onto_GPU";
-	
         TrackGeometryType Tractogram::default_tract_geom (TrackGeometryType::Pseudotubes);
+
+	static std::vector<std::vector<std::vector<std::string>>> transformations;
+
+	void compute_normalized_vector(double& a, double& b, double& c, pugi::xml_node childOV) {
+	  std::array<double,3> v{ childOV.attribute("x").as_double(),
+				  childOV.attribute("y").as_double(),
+				  childOV.attribute("z").as_double() };
+	  double norm = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+	  a = v[0] / norm;
+	  b = v[1] / norm;
+	  c = v[2] / norm;
+	}
+
+	void add_transformation(const std::vector<std::vector<double>> &m) {
+	  std::vector<std::vector<std::string>> ms{
+						   {std::to_string(m[0][0]), std::to_string(m[0][1]), std::to_string(m[0][2])},
+						   {std::to_string(m[1][0]), std::to_string(m[1][1]), std::to_string(m[1][2])},
+						   {std::to_string(m[2][0]), std::to_string(m[2][1]), std::to_string(m[2][2])}
+	  };
+	  transformations.push_back(std::move(ms));
+	}
 
         std::string Tractogram::Shader::vertex_shader_source (const Displayable& displayable)
         {
@@ -292,8 +302,11 @@ namespace MR
           switch (color_type) {
             case TrackColourType::Direction:
 	      // Convert RGB to CMYB explained (in French) at https://fr.wikipedia.org/wiki/Quadrichromie#Conversion_de_RVB_vers_CMJN
-              source += using_geom ? "vec3 absnormg = abs (normalize (g_tangent));\n float t = absnormg.x;\n absnormg.x=absnormg.z;\n absnormg.z=absnormg.y;\n absnormg.y =t;\n"
-                                   : "vec3 absnormv = abs (normalize (v_tangent));\n float t = absnormv.x;\n absnormv.x=absnormv.z;\n absnormv.z=absnormv.y;\n absnormv.y =t;\n";
+              source += using_geom ? "vec3 absnormg = abs (normalize (g_tangent));\n"
+                                   : "vec3 absnormv = abs (normalize (v_tangent));\n";
+	         // NB : We don't do anymore "float t = absnormv.x;\n absnormv.x=absnormv.z;\n absnormv.z=absnormv.y;\n absnormv.y =t;\n" 
+	         // instructions because these instructions add a rotation which can be parametriezd inside XML configuration file
+	         // with a rotattion defined by axis (1,1,1) and and angle of 120 degrees
 	      // Compute min(C,M,Y)
               source += using_geom ? "float ming = min (min (1-absnormg.x, 1-absnormg.y), 1-absnormg.z);\n"
                                    : "float minv = min (min (1-absnormv.x, 1-absnormv.y), 1-absnormv.z);\n";
@@ -306,13 +319,16 @@ namespace MR
               source += "}\n else {";
               source += using_geom ? "  colour = ((1,1,1) - absnormg - (ming,ming,ming));}\n"
                                    : "  colour = ((1,1,1) - absnormv - (minv,minv,minv));}\n";
-	      // Color rotation
-	      source += "vec3 colour_rot = (";
-	      source += m11 + "* colour.x + " + m12 + "* colour.y + " + m13 + "* colour.z, ";
-	      source += m21 + "* colour.x + " + m22 + "* colour.y + " + m33 + "* colour.z, ";
-	      source += m31 + "* colour.x + " + m32 + "* colour.y + " + m33 + "* colour.z); ";
-	      source += "colour = colour_rot;";
-	      
+	      // Apply colour transformations
+	      source += "vec3 colour_tmp;\n";
+	      for (const auto &ms : transformations) {
+		source += "colour_tmp=(";
+		source += ms[0][0] + "* colour.x + " + ms[0][1] + "* colour.y + " + ms[0][2] + "* colour.z, ";
+		source += ms[1][0] + "* colour.x + " + ms[1][1] + "* colour.y + " + ms[1][2] + "* colour.z, ";
+		source += ms[2][0] + "* colour.x + " + ms[2][1] + "* colour.y + " + ms[2][2] + "* colour.z);\n ";
+		source += "colour = colour_tmp;\n";
+	      }
+
 //              source += "colour = texelFetch(u_color_mapper, (255*colour.x) << 16 + (255*colour.y) << 8 + (255*colour.z) );}\n";
 	      break;
             case TrackColourType::ScalarFile:
@@ -1069,7 +1085,9 @@ namespace MR
           sizes.clear();
           tck_count = 0;
 
-	  // Initialize Rotation matrix
+	  //
+	  // Initialize transformations
+	  //
 	  pugi::xml_document doc;
 	  pugi::xml_parse_result result = doc.load_file(getenv("MRTRIX_XML"));
 
@@ -1078,31 +1096,68 @@ namespace MR
 	    exit(1);
 	  }
 
-	  std::cout << "Load result: " << result.description() << std::endl;
-	  std::cout << "Rotation" << std::endl;
-	  auto childRot = doc.child("Rotation");
-	  auto childOV = childRot.child("OrientationVector");
-	  std::array<double, 3> v = { childOV.attribute("x").as_double(),
-				      childOV.attribute("y").as_double(),
-				      childOV.attribute("z").as_double() };
+	  for (auto child : doc.child("Transformations").children()) {
+	    if (strcmp(child.name(), "Rotation") == 0) {
+	      double a, b, c;
+	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis"));
 
-	  double phi = childRot.child("Angle").attribute("degrees").as_double() * M_PI / 180.0;
+	      double phi = child.child("Angle").attribute("degrees").as_double() * M_PI / 180.0;
 
-	  // We compute rotation matrix according to http://www.pierreaudibert.fr/tra/Rotation3D.pdf
-	  double norm = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-	  double a = v[0] / norm;
-	  double b = v[1] / norm;
-	  double c = v[2] / norm;
+	      // We initialize rotation matrix according to http://www.pierreaudibert.fr/tra/Rotation3D.pdf
+	      // NB : We do not use std::array<std::array<double,3>, 3>, because it does not initialize properly on Visual Studio
+	      std::vector<std::vector<double>> m{
+						 {(1 - cos(phi)) * a * a + cos(phi),     (1 - cos(phi)) * a * b - sin(phi) * c, (1 - cos(phi)) * a * c + sin(phi) * b},
+						 {(1 - cos(phi)) * b * a + sin(phi) * c, (1 - cos(phi)) * b * b + cos(phi),     (1 - cos(phi)) * b * c - sin(phi) * a},
+						 {(1 - cos(phi)) * c * a - sin(phi) * b, (1 - cos(phi)) * c * b + sin(phi) * a, (1 - cos(phi)) * c * c + cos(phi)}
+	      };
 
-	  m11 = std::to_string( (1 - cos(phi)) * a * a + cos(phi) );
-	  m12 = std::to_string( (1 - cos(phi)) * a * b - sin(phi) * c );
-	  m13 = std::to_string( (1 - cos(phi)) * a * c + sin(phi) * b );
-	  m21 = std::to_string( (1 - cos(phi)) * b * a + sin(phi) * c );
-	  m22 = std::to_string( (1 - cos(phi)) * b * b + cos(phi) );
-	  m23 = std::to_string( (1 - cos(phi)) * b * c - sin(phi) * a );
-	  m31 = std::to_string( (1 - cos(phi)) * c * a - sin(phi) * b );
-	  m32 = std::to_string( (1 - cos(phi)) * c * b + sin(phi) * a );
-	  m33 = std::to_string( (1 - cos(phi)) * c * c + cos(phi) );
+	      add_transformation(m);
+	    }
+	    else if (strcmp(child.name(), "CentralSymmetry") == 0) {
+	      // We initialize symmetry matrix according to computations we have done
+	      std::vector<std::vector<double>> m{
+						 {-1.0,  0.0,  0.0},
+						 { 0.0, -1.0,  0.0},
+						 { 0.0,  0.0, -1.0}
+	      };
+
+	      add_transformation(m);
+	    }
+	    else if (strcmp(child.name(), "AxisSymmetry") == 0) {
+	      double a, b, c;
+	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis"));
+
+	      // We initialize symmetry matrix :
+	      //   - Let P be the matrix that changes referential so that z axis becomes axis of the symmetry.
+	      //     (see  http://www.pierreaudibert.fr/tra/Rotation3D.pdf for values inside P)
+	      //   - In this referential, symmetry matrix is S = Matrix([[-1,0,0],[0,-1,0],[0,0,1]])
+	      //   - Thus m = P*S*P.T (where P.T is transposition of P)
+	      std::vector<std::vector<double>> m{
+						 {2.0 * a * a - 1.0, 2.0 * a * b,       2.0 * a * c},
+						 {2.0 * a * b,       2.0 * b * b - 1.0, 2.0 * b * c},
+						 {2.0 * a * c,       2.0 * b * c,       2.0 * c * c - 1.0}
+	      };
+
+	      add_transformation(m);
+	    }
+	    else if (strcmp(child.name(), "PlaneSymmetry") == 0) {
+	      double a, b, c;
+	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis_normalToPlane"));
+
+	      // We initialize symmetry matrix :
+	      //   - Let P be the matrix that changes referential so that z axis becomes axis normal to plane of the symmetry.
+	      //     (see  http://www.pierreaudibert.fr/tra/Rotation3D.pdf for values inside P)
+	      //   - In this referential, symmetry matrix is S = Matrix([[1,0,0],[0,1,0],[0,0,-1]])
+	      //   - Thus m = P*S*P.T (where P.T is transposition of P)
+	      std::vector<std::vector<double>> m{
+						 {-2.0 * a * a + 1.0, -2.0 * a * b,       -2.0 * a * c},
+						 {-2.0 * a * b,       -2.0 * b * b + 1.0, -2.0 * b * c},
+						 {-2.0 * a * c,       -2.0 * b * c,       -2.0 * c * c + 1.0}
+	      };
+
+	      add_transformation(m);
+	    }
+	  }
 	  
 	  ASSERT_GL_MRVIEW_CONTEXT_IS_CURRENT;
         }
