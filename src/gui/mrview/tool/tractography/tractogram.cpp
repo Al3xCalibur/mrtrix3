@@ -322,10 +322,9 @@ namespace MR
 	      // Apply colour transformations
 	      source += "vec3 colour_tmp;\n";
 	      for (const auto &ms : transformations) {
-		source += "colour_tmp=(";
-		source += ms[0][0] + "* colour.x + " + ms[0][1] + "* colour.y + " + ms[0][2] + "* colour.z, ";
-		source += ms[1][0] + "* colour.x + " + ms[1][1] + "* colour.y + " + ms[1][2] + "* colour.z, ";
-		source += ms[2][0] + "* colour.x + " + ms[2][1] + "* colour.y + " + ms[2][2] + "* colour.z);\n ";
+		source += "colour_tmp.x = " + ms[0][0] + "* colour.x + " + ms[0][1] + "* colour.y + " + ms[0][2] + "* colour.z;\n";
+		source += "colour_tmp.y = " + ms[1][0] + "* colour.x + " + ms[1][1] + "* colour.y + " + ms[1][2] + "* colour.z;\n";
+		source += "colour_tmp.z = " + ms[2][0] + "* colour.x + " + ms[2][1] + "* colour.y + " + ms[2][2] + "* colour.z;\n";
 		source += "colour = colour_tmp;\n";
 	      }
 
@@ -1092,7 +1091,11 @@ namespace MR
 	  pugi::xml_parse_result result = doc.load_file(getenv("MRTRIX_XML"));
 
 	  if (result.status != pugi::status_ok) {
-	    std::cerr << "Coud not open XML file named \"" << getenv("MRTRIX_XML") << "\" (according to \"MRTRIX_XML\" environnement variable)" << std::endl;
+	    if (!getenv("MRTRIX_XML")) {
+	      std::cerr << "ERROR : \"MRTRIX_XML\" environnement variable is not defined." << std::endl;
+	    } else {
+	      std::cerr << "ERROR : Coud not open XML file named \"" << getenv("MRTRIX_XML") << "\" (according to \"MRTRIX_XML\" environnement variable)" << std::endl;
+	    }
 	    exit(1);
 	  }
 
