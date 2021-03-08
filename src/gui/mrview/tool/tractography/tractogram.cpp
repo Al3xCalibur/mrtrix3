@@ -29,9 +29,9 @@
 #include <array>
 #include <string>
 
-// The following instruction is *very* ugly, but I could not find
-// another way to have build script compile pugixml.cpp and then
-// link the object file
+// The following instruction is *very* ugly, but Michel Simatic could 
+// not find another way to have build script compile pugixml.cpp and 
+// then link the object file
 #include "gui/mrview/tool/tractography/pugixml.cpp"
 
 const size_t MAX_BUFFER_SIZE = 2796200;  // number of points to fill 32MB
@@ -48,7 +48,13 @@ namespace MR
 
         TrackGeometryType Tractogram::default_tract_geom (TrackGeometryType::Pseudotubes);
 
-	static std::vector<std::vector<std::vector<std::string>>> transformations;
+	// In transformations variable :
+	// - First element of pair is the transformation matrix
+	// - Second element of pair indicates, if true, there must be a 
+	//   translation of (-0.5,-0.5,-0.5) before doing the transformation
+	//   and a translation of (+0.5,+0.5,+0.5) after the
+	//   transformation. If false, no translation to apply.
+	static std::vector<std::pair<std::vector<std::vector<std::string>>, bool>> transformations;
 
 	void compute_normalized_vector(double& a, double& b, double& c, pugi::xml_node childOV) {
 	  std::array<double,3> v{ childOV.attribute("x").as_double(),
@@ -60,13 +66,13 @@ namespace MR
 	  c = v[2] / norm;
 	}
 
-	void add_transformation(const std::vector<std::vector<double>> &m) {
+	void add_transformation(const std::vector<std::vector<double>> &m, const bool requiresTranslations) {
 	  std::vector<std::vector<std::string>> ms{
 						   {std::to_string(m[0][0]), std::to_string(m[0][1]), std::to_string(m[0][2])},
 						   {std::to_string(m[1][0]), std::to_string(m[1][1]), std::to_string(m[1][2])},
 						   {std::to_string(m[2][0]), std::to_string(m[2][1]), std::to_string(m[2][2])}
 	  };
-	  transformations.push_back(std::move(ms));
+	  transformations.push_back(std::make_pair(std::move(ms), requiresTranslations));
 	}
 
         std::string Tractogram::Shader::vertex_shader_source (const Displayable& displayable)
@@ -321,11 +327,24 @@ namespace MR
                                    : "  colour = ((1,1,1) - absnormv - (minv,minv,minv));}\n";
 	      // Apply colour transformations
 	      source += "vec3 colour_tmp;\n";
-	      for (const auto &ms : transformations) {
+	      for (const auto &p : transformations) {
+		const auto &ms = p.first;
+		const auto &requiresTranslation = p.second;
+		if (requiresTranslation) {
+		  source += "colour -= (0.5, 0.5, 0.5);\n";
+		}
 		source += "colour_tmp.x = " + ms[0][0] + "* colour.x + " + ms[0][1] + "* colour.y + " + ms[0][2] + "* colour.z;\n";
 		source += "colour_tmp.y = " + ms[1][0] + "* colour.x + " + ms[1][1] + "* colour.y + " + ms[1][2] + "* colour.z;\n";
 		source += "colour_tmp.z = " + ms[2][0] + "* colour.x + " + ms[2][1] + "* colour.y + " + ms[2][2] + "* colour.z;\n";
 		source += "colour = colour_tmp;\n";
+		if (requiresTranslation) {
+		  source += "colour += (0.5, 0.5, 0.5);\n";
+		}
+		// Put back color coordinates into [0,1] if
+		// transformation send them outside [0,1]
+		source += "colour.x = min(1, max(0, colour.x));\n";
+		source += "colour.y = min(1, max(0, colour.y));\n";
+		source += "colour.z = min(1, max(0, colour.z));\n";	   
 	      }
 
 //              source += "colour = texelFetch(u_color_mapper, (255*colour.x) << 16 + (255*colour.y) << 8 + (255*colour.z) );}\n";
@@ -1054,6 +1073,9 @@ namespace MR
 //          };
           char *colors = new char[3*4096*4096+18];
 
+	  if (!getenv("MRTRIX_IMAGE")) {
+	    std::cerr << "ERROR : \"MRTRIX_IMAGE\" environnement variable is not defined." << std::endl;
+	  } 
           std::ifstream infile(getenv("MRTRIX_IMAGE"));
 
           infile.read(colors, 3*4096*4096+18);
@@ -1114,7 +1136,7 @@ namespace MR
 						 {(1 - cos(phi)) * c * a - sin(phi) * b, (1 - cos(phi)) * c * b + sin(phi) * a, (1 - cos(phi)) * c * c + cos(phi)}
 	      };
 
-	      add_transformation(m);
+	      add_transformation(m, true);
 	    }
 	    else if (strcmp(child.name(), "CentralSymmetry") == 0) {
 	      // We initialize symmetry matrix according to computations we have done
@@ -1124,7 +1146,7 @@ namespace MR
 						 { 0.0,  0.0, -1.0}
 	      };
 
-	      add_transformation(m);
+	      add_transformation(m, true);
 	    }
 	    else if (strcmp(child.name(), "AxisSymmetry") == 0) {
 	      double a, b, c;
@@ -1141,7 +1163,7 @@ namespace MR
 						 {2.0 * a * c,       2.0 * b * c,       2.0 * c * c - 1.0}
 	      };
 
-	      add_transformation(m);
+	      add_transformation(m, true);
 	    }
 	    else if (strcmp(child.name(), "PlaneSymmetry") == 0) {
 	      double a, b, c;
@@ -1158,7 +1180,7 @@ namespace MR
 						 {-2.0 * a * c,       -2.0 * b * c,       -2.0 * c * c + 1.0}
 	      };
 
-	      add_transformation(m);
+	      add_transformation(m, true);
 	    }
 	  }
 	  

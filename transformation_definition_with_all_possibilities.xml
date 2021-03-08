@@ -6,24 +6,25 @@
 
   <!-- Rotation of colors                                         -->
   <!--   1) Around axis defined by Orientation vector (x,y,z) and -->
-  <!--      going through origin (0,0,0)                          -->
+  <!--      going through center of color space                   -->
   <!--   2) With angle defined in degrees                         -->
   <Rotation>
     <OrientationVector_of_axis x="1" y="1" z="1"/>
     <Angle degrees="120"/>
   </Rotation>
   
-  <!-- Symmetry of colors centered around origin (0,0,0) -->
+  <!-- Symmetry of colors centered around center of color space -->
   <CentralSymmetry/>
 
   <!-- Symmetry against axis defined by Orientation vector (x,y,z) and -->
-  <!-- going through origin (0,0,0)                                    -->
+  <!-- going through center of color space                             -->
   <AxisSymmetry>
     <OrientationVector_of_axis x="1" y="0" z="0"/>
   </AxisSymmetry>
 
-  <!-- Symmetry against plane which normal axis is defined by      -->
-  <!-- Orientation vector (x,y,z) and going through origin (0,0,0) -->
+  <!-- Symmetry against plane which normal axis is defined by -->
+  <!-- Orientation vector (x,y,z) and going through center of -->
+  <!-- color space                                            -->     
   <PlaneSymmetry>
     <OrientationVector_of_axis_normalToPlane x="1" y="0" z="0"/>
   </PlaneSymmetry>
