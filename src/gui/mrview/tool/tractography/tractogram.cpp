@@ -15,8 +15,7 @@
 
 #include "progressbar.h"
 #include "gui/mrview/tool/tractography/tractogram.h"
-#include "gui/mrview/tool/tractography/pugiconfig.hpp"
-#include "gui/mrview/tool/tractography/pugixml.hpp"
+#include "gui/pugixml.hpp"
 #include "gui/mrview/window.h"
 #include "gui/projection.h"
 #include "dwi/tractography/file.h"
@@ -32,7 +31,7 @@
 // The following instruction is *very* ugly, but Michel Simatic could 
 // not find another way to have build script compile pugixml.cpp and 
 // then link the object file
-#include "gui/mrview/tool/tractography/pugixml.cpp"
+//#include "gui/mrview/tool/tractography/pugixml.cpp"
 
 const size_t MAX_BUFFER_SIZE = 2796200;  // number of points to fill 32MB
 
@@ -48,13 +47,8 @@ namespace MR
 
         TrackGeometryType Tractogram::default_tract_geom (TrackGeometryType::Pseudotubes);
 
-	// In transformations variable :
-	// - First element of pair is the transformation matrix
-	// - Second element of pair indicates, if true, there must be a 
-	//   translation of (-0.5,-0.5,-0.5) before doing the transformation
-	//   and a translation of (+0.5,+0.5,+0.5) after the
-	//   transformation. If false, no translation to apply.
-	static std::vector<std::pair<std::vector<std::vector<std::string>>, bool>> transformations;
+	// Transformations variable contains vector of 3x3 matrices which can be applied to transform colors.
+	std::vector<std::vector<std::vector<double>>> transformations;
 
 	void compute_normalized_vector(double& a, double& b, double& c, pugi::xml_node childOV) {
 	  std::array<double,3> v{ childOV.attribute("x").as_double(),
@@ -66,15 +60,89 @@ namespace MR
 	  c = v[2] / norm;
 	}
 
-	void add_transformation(const std::vector<std::vector<double>> &m, const bool requiresTranslations) {
-	  std::vector<std::vector<std::string>> ms{
-						   {std::to_string(m[0][0]), std::to_string(m[0][1]), std::to_string(m[0][2])},
-						   {std::to_string(m[1][0]), std::to_string(m[1][1]), std::to_string(m[1][2])},
-						   {std::to_string(m[2][0]), std::to_string(m[2][1]), std::to_string(m[2][2])}
-	  };
-	  transformations.push_back(std::make_pair(std::move(ms), requiresTranslations));
-	}
+	void init_transformations() {
+	  static bool init_done = false;
+	  if (init_done) {
+	    return;
+	  }
+	  init_done = true;
 
+	  pugi::xml_document doc;
+	  pugi::xml_parse_result result = doc.load_file(getenv("MRTRIX_XML"));
+
+	  if (result.status != pugi::status_ok) {
+	    if (!getenv("MRTRIX_XML")) {
+	      std::cerr << "ERROR : \"MRTRIX_XML\" environnement variable is not defined." << std::endl;
+	    } else {
+	      std::cerr << "ERROR : Coud not open XML file named \"" << getenv("MRTRIX_XML") << "\" (according to \"MRTRIX_XML\" environnement variable)" << std::endl;
+	    }
+	    exit(1);
+	  }
+
+	  for (auto child : doc.child("Transformations").children()) {
+	    if (strcmp(child.name(), "Rotation") == 0) {
+	      double a, b, c;
+	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis"));
+
+	      double phi = child.child("Angle").attribute("degrees").as_double() * M_PI / 180.0;
+
+	      // We initialize rotation matrix according to http://www.pierreaudibert.fr/tra/Rotation3D.pdf
+	      // NB : We do not use std::array<std::array<double,3>, 3>, because it does not initialize properly on Visual Studio
+	      std::vector<std::vector<double>> m{
+						 {(1 - cos(phi)) * a * a + cos(phi),     (1 - cos(phi)) * a * b - sin(phi) * c, (1 - cos(phi)) * a * c + sin(phi) * b},
+						 {(1 - cos(phi)) * b * a + sin(phi) * c, (1 - cos(phi)) * b * b + cos(phi),     (1 - cos(phi)) * b * c - sin(phi) * a},
+						 {(1 - cos(phi)) * c * a - sin(phi) * b, (1 - cos(phi)) * c * b + sin(phi) * a, (1 - cos(phi)) * c * c + cos(phi)}
+	      };
+
+	      transformations.push_back(std::move(m));
+	    }
+	    else if (strcmp(child.name(), "CentralSymmetry") == 0) {
+	      // We initialize symmetry matrix according to computations we have done
+	      std::vector<std::vector<double>> m{
+						 {-1.0,  0.0,  0.0},
+						 { 0.0, -1.0,  0.0},
+						 { 0.0,  0.0, -1.0}
+	      };
+
+	      transformations.push_back(std::move(m));
+	    }
+	    else if (strcmp(child.name(), "AxisSymmetry") == 0) {
+	      double a, b, c;
+	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis"));
+
+	      // We initialize symmetry matrix :
+	      //   - Let P be the matrix that changes referential so that z axis becomes axis of the symmetry.
+	      //     (see  http://www.pierreaudibert.fr/tra/Rotation3D.pdf for values inside P)
+	      //   - In this referential, symmetry matrix is S = Matrix([[-1,0,0],[0,-1,0],[0,0,1]])
+	      //   - Thus m = P*S*P.T (where P.T is transposition of P)
+	      std::vector<std::vector<double>> m{
+						 {2.0 * a * a - 1.0, 2.0 * a * b,       2.0 * a * c},
+						 {2.0 * a * b,       2.0 * b * b - 1.0, 2.0 * b * c},
+						 {2.0 * a * c,       2.0 * b * c,       2.0 * c * c - 1.0}
+	      };
+
+	      transformations.push_back(std::move(m));
+	    }
+	    else if (strcmp(child.name(), "PlaneSymmetry") == 0) {
+	      double a, b, c;
+	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis_normalToPlane"));
+
+	      // We initialize symmetry matrix :
+	      //   - Let P be the matrix that changes referential so that z axis becomes axis normal to plane of the symmetry.
+	      //     (see  http://www.pierreaudibert.fr/tra/Rotation3D.pdf for values inside P)
+	      //   - In this referential, symmetry matrix is S = Matrix([[1,0,0],[0,1,0],[0,0,-1]])
+	      //   - Thus m = P*S*P.T (where P.T is transposition of P)
+	      std::vector<std::vector<double>> m{
+						 {-2.0 * a * a + 1.0, -2.0 * a * b,       -2.0 * a * c},
+						 {-2.0 * a * b,       -2.0 * b * b + 1.0, -2.0 * b * c},
+						 {-2.0 * a * c,       -2.0 * b * c,       -2.0 * c * c + 1.0}
+	      };
+
+	      transformations.push_back(std::move(m));
+	    }
+	  }
+	}
+	
         std::string Tractogram::Shader::vertex_shader_source (const Displayable& displayable)
         {
           const Tractogram& tractogram = dynamic_cast<const Tractogram&>(displayable);
@@ -327,19 +395,19 @@ namespace MR
                                    : "  colour = ((1,1,1) - absnormv - (minv,minv,minv));}\n";
 	      // Apply colour transformations
 	      source += "vec3 colour_tmp;\n";
-	      for (const auto &p : transformations) {
-		const auto &ms = p.first;
-		const auto &requiresTranslation = p.second;
-		if (requiresTranslation) {
-		  source += "colour -= (0.5, 0.5, 0.5);\n";
-		}
-		source += "colour_tmp.x = " + ms[0][0] + "* colour.x + " + ms[0][1] + "* colour.y + " + ms[0][2] + "* colour.z;\n";
-		source += "colour_tmp.y = " + ms[1][0] + "* colour.x + " + ms[1][1] + "* colour.y + " + ms[1][2] + "* colour.z;\n";
-		source += "colour_tmp.z = " + ms[2][0] + "* colour.x + " + ms[2][1] + "* colour.y + " + ms[2][2] + "* colour.z;\n";
+	      for (const auto &ms : transformations) {
+		// Center of the transformation is center of color space ==> Translate color by (-0.5,-0.5,-0.5)
+		source += "colour -= (0.5, 0.5, 0.5);\n";
+
+		// Apply transformation
+		source += "colour_tmp.x = " + std::to_string(ms[0][0]) + "* colour.x + " + std::to_string(ms[0][1]) + "* colour.y + " + std::to_string(ms[0][2]) + "* colour.z;\n";
+		source += "colour_tmp.y = " + std::to_string(ms[1][0]) + "* colour.x + " + std::to_string(ms[1][1]) + "* colour.y + " + std::to_string(ms[1][2]) + "* colour.z;\n";
+		source += "colour_tmp.z = " + std::to_string(ms[2][0]) + "* colour.x + " + std::to_string(ms[2][1]) + "* colour.y + " + std::to_string(ms[2][2]) + "* colour.z;\n";
 		source += "colour = colour_tmp;\n";
-		if (requiresTranslation) {
-		  source += "colour += (0.5, 0.5, 0.5);\n";
-		}
+
+		// Translate color
+		source += "colour += (0.5, 0.5, 0.5);\n";
+
 		// Put back color coordinates into [0,1] if
 		// transformation send them outside [0,1]
 		source += "colour.x = min(1, max(0, colour.x));\n";
@@ -1106,83 +1174,7 @@ namespace MR
           sizes.clear();
           tck_count = 0;
 
-	  //
-	  // Initialize transformations
-	  //
-	  pugi::xml_document doc;
-	  pugi::xml_parse_result result = doc.load_file(getenv("MRTRIX_XML"));
-
-	  if (result.status != pugi::status_ok) {
-	    if (!getenv("MRTRIX_XML")) {
-	      std::cerr << "ERROR : \"MRTRIX_XML\" environnement variable is not defined." << std::endl;
-	    } else {
-	      std::cerr << "ERROR : Coud not open XML file named \"" << getenv("MRTRIX_XML") << "\" (according to \"MRTRIX_XML\" environnement variable)" << std::endl;
-	    }
-	    exit(1);
-	  }
-
-	  for (auto child : doc.child("Transformations").children()) {
-	    if (strcmp(child.name(), "Rotation") == 0) {
-	      double a, b, c;
-	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis"));
-
-	      double phi = child.child("Angle").attribute("degrees").as_double() * M_PI / 180.0;
-
-	      // We initialize rotation matrix according to http://www.pierreaudibert.fr/tra/Rotation3D.pdf
-	      // NB : We do not use std::array<std::array<double,3>, 3>, because it does not initialize properly on Visual Studio
-	      std::vector<std::vector<double>> m{
-						 {(1 - cos(phi)) * a * a + cos(phi),     (1 - cos(phi)) * a * b - sin(phi) * c, (1 - cos(phi)) * a * c + sin(phi) * b},
-						 {(1 - cos(phi)) * b * a + sin(phi) * c, (1 - cos(phi)) * b * b + cos(phi),     (1 - cos(phi)) * b * c - sin(phi) * a},
-						 {(1 - cos(phi)) * c * a - sin(phi) * b, (1 - cos(phi)) * c * b + sin(phi) * a, (1 - cos(phi)) * c * c + cos(phi)}
-	      };
-
-	      add_transformation(m, true);
-	    }
-	    else if (strcmp(child.name(), "CentralSymmetry") == 0) {
-	      // We initialize symmetry matrix according to computations we have done
-	      std::vector<std::vector<double>> m{
-						 {-1.0,  0.0,  0.0},
-						 { 0.0, -1.0,  0.0},
-						 { 0.0,  0.0, -1.0}
-	      };
-
-	      add_transformation(m, true);
-	    }
-	    else if (strcmp(child.name(), "AxisSymmetry") == 0) {
-	      double a, b, c;
-	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis"));
-
-	      // We initialize symmetry matrix :
-	      //   - Let P be the matrix that changes referential so that z axis becomes axis of the symmetry.
-	      //     (see  http://www.pierreaudibert.fr/tra/Rotation3D.pdf for values inside P)
-	      //   - In this referential, symmetry matrix is S = Matrix([[-1,0,0],[0,-1,0],[0,0,1]])
-	      //   - Thus m = P*S*P.T (where P.T is transposition of P)
-	      std::vector<std::vector<double>> m{
-						 {2.0 * a * a - 1.0, 2.0 * a * b,       2.0 * a * c},
-						 {2.0 * a * b,       2.0 * b * b - 1.0, 2.0 * b * c},
-						 {2.0 * a * c,       2.0 * b * c,       2.0 * c * c - 1.0}
-	      };
-
-	      add_transformation(m, true);
-	    }
-	    else if (strcmp(child.name(), "PlaneSymmetry") == 0) {
-	      double a, b, c;
-	      compute_normalized_vector(a, b, c, child.child("OrientationVector_of_axis_normalToPlane"));
-
-	      // We initialize symmetry matrix :
-	      //   - Let P be the matrix that changes referential so that z axis becomes axis normal to plane of the symmetry.
-	      //     (see  http://www.pierreaudibert.fr/tra/Rotation3D.pdf for values inside P)
-	      //   - In this referential, symmetry matrix is S = Matrix([[1,0,0],[0,1,0],[0,0,-1]])
-	      //   - Thus m = P*S*P.T (where P.T is transposition of P)
-	      std::vector<std::vector<double>> m{
-						 {-2.0 * a * a + 1.0, -2.0 * a * b,       -2.0 * a * c},
-						 {-2.0 * a * b,       -2.0 * b * b + 1.0, -2.0 * b * c},
-						 {-2.0 * a * c,       -2.0 * b * c,       -2.0 * c * c + 1.0}
-	      };
-
-	      add_transformation(m, true);
-	    }
-	  }
+	  init_transformations();
 	  
 	  ASSERT_GL_MRVIEW_CONTEXT_IS_CURRENT;
         }

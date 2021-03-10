@@ -14,7 +14,7 @@
 #ifndef SOURCE_PUGIXML_CPP
 #define SOURCE_PUGIXML_CPP
 
-#include "gui/mrview/tool/tractography/pugixml.hpp"
+#include "gui/pugixml.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>

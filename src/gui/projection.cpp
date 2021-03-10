@@ -16,6 +16,7 @@
 
 namespace MR {
 namespace GUI {
+  std::vector<double> colorAxis(int axis);
 
 namespace {
 class OrientationLabel {
@@ -54,11 +55,14 @@ void Projection::draw_orientation_labels() const {
   for (size_t i = 0; i < labels.size(); ++i) {
     std::string label = labels[i].label;
     if(label == "L" || label == "R") {
-      setup_render_text(0.651, 0.3216, 0.6039);
+      std::vector<double> col = colorAxis(0);
+      setup_render_text(col[0], col[1], col[2]);
     } else if (label == "P" || label == "A"){
-      setup_render_text(0.9569, 0.902, 0.0);
+      std::vector<double> col = colorAxis(1);
+      setup_render_text(col[0], col[1], col[2]);
     } else {
-      setup_render_text(0.4314, 0.7804, 0.851);
+      std::vector<double> col = colorAxis(2);
+      setup_render_text(col[0], col[1], col[2]);
     }
     float pos[] = { labels[i].dir[0], labels[i].dir[1]};
     float dist = std::min (height()/(10*abs (pos[0])), height()/(10*abs (pos[1]))) * 1.2;
