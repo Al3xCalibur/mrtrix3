@@ -4,10 +4,11 @@
 <!-- The transformations are applied in the order in which they appear -->
 <Transformations>
 
-  <!-- Rotation so that x -> y -> z -> x  -->
+  <!-- Rotation so that x -> y -> z -> x.              -->
+  <!-- ==> RGB axis appear as Magenta/Yellow/Cyan axis -->
   <Rotation>
     <OrientationVector_of_axis x="1" y="1" z="1"/>
     <Angle degrees="120"/>
   </Rotation>
-  
+
 </Transformations>
